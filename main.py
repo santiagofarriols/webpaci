@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 @app.route('/get-events', methods=['POST'])
 def get_events():
-    # Seguridad por API Key
+    # Seguridad con API Key
     api_key = request.headers.get('X-API-KEY')
     if api_key != os.environ.get('API_KEY'):
         return jsonify({'error': 'Unauthorized'}), 401
@@ -17,6 +17,11 @@ def get_events():
     user = data['username']
     pwd = data['password']
 
+    # URLS primero
+    login_url = 'https://haz-prod-webapp.azurewebsites.net/gamexamplelogin.aspx'
+    agenda_url = 'https://haz-prod-webapp.azurewebsites.net/agenda.aspx'
+
+    # Headers con Referer correcto
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
         "Accept-Language": "en-US,en;q=0.9",
@@ -25,9 +30,7 @@ def get_events():
 
     session = requests.Session()
 
-    login_url = 'https://haz-prod-webapp.azurewebsites.net/gamexamplelogin.aspx'
-    agenda_url = 'https://haz-prod-webapp.azurewebsites.net/agenda.aspx'
-
+    # Paso 1: obtener tokens de la página de login
     login_page = session.get(login_url, headers=headers)
     soup = BeautifulSoup(login_page.text, 'html.parser')
 
@@ -35,12 +38,14 @@ def get_events():
     eventvalidation_tag = soup.find(id='__EVENTVALIDATION')
 
     if not viewstate_tag or not eventvalidation_tag:
-        print("Error: No se encontró __VIEWSTATE o __EVENTVALIDATION")
+        print("❌ No se encontró __VIEWSTATE o __EVENTVALIDATION")
+        print("Login HTML (parcial):", login_page.text[:500])
         return jsonify({'error': 'Login page did not return expected tokens'}), 500
 
     viewstate = viewstate_tag['value']
     eventvalidation = eventvalidation_tag['value']
 
+    # Paso 2: enviar login
     payload = {
         '__VIEWSTATE': viewstate,
         '__EVENTVALIDATION': eventvalidation,
@@ -50,17 +55,16 @@ def get_events():
     }
 
     response = session.post(login_url, data=payload, headers=headers, allow_redirects=True)
-    print("Login POST status:", response.status_code)
-    print("Login POST response preview:", response.text[:300])
+    print("✅ POST Login status:", response.status_code)
+    print("📝 Login preview:", response.text[:300])
 
+    # Paso 3: acceder a la agenda
     agenda_page = session.get(agenda_url, headers=headers)
     soup = BeautifulSoup(agenda_page.text, 'html.parser')
-    print("Status de login page:", login_page.status_code)
-    print("Contenido login page (primeras líneas):")
-    print(login_page.text[:500])
 
+    # Extraer eventos (ajustá la clase real si es necesario)
     eventos = []
-    for e in soup.find_all('div', class_='nombre-clase-evento'):  # ajustar si necesario
+    for e in soup.find_all('div', class_='nombre-clase-evento'):
         eventos.append(e.text.strip())
 
     return jsonify({'eventos': eventos})
