@@ -19,7 +19,8 @@ def get_events():
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        "Accept-Language": "en-US,en;q=0.9"
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": login_url
     }
 
     session = requests.Session()
@@ -30,8 +31,15 @@ def get_events():
     login_page = session.get(login_url, headers=headers)
     soup = BeautifulSoup(login_page.text, 'html.parser')
 
-    viewstate = soup.find(id='__VIEWSTATE')['value']
-    eventvalidation = soup.find(id='__EVENTVALIDATION')['value']
+    viewstate_tag = soup.find(id='__VIEWSTATE')
+    eventvalidation_tag = soup.find(id='__EVENTVALIDATION')
+
+    if not viewstate_tag or not eventvalidation_tag:
+        print("Error: No se encontró __VIEWSTATE o __EVENTVALIDATION")
+        return jsonify({'error': 'Login page did not return expected tokens'}), 500
+
+    viewstate = viewstate_tag['value']
+    eventvalidation = eventvalidation_tag['value']
 
     payload = {
         '__VIEWSTATE': viewstate,
@@ -41,10 +49,15 @@ def get_events():
         'btnLogin': 'Entrar',
     }
 
-    session.post(login_url, data=payload, headers=headers)
+    response = session.post(login_url, data=payload, headers=headers, allow_redirects=True)
+    print("Login POST status:", response.status_code)
+    print("Login POST response preview:", response.text[:300])
 
     agenda_page = session.get(agenda_url, headers=headers)
     soup = BeautifulSoup(agenda_page.text, 'html.parser')
+    print("Status de login page:", login_page.status_code)
+    print("Contenido login page (primeras líneas):")
+    print(login_page.text[:500])
 
     eventos = []
     for e in soup.find_all('div', class_='nombre-clase-evento'):  # ajustar si necesario
